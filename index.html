@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>記入式クイズ（55問ランダム）</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif; }
+    body { margin: 0; background:#f6f7f9; color:#111; }
+    .wrap { max-width: 820px; margin: 0 auto; padding: 20px; }
+    .card { background:#fff; border-radius:16px; box-shadow: 0 8px 24px rgba(0,0,0,.08); padding: 18px; }
+    h1 { font-size: 20px; margin: 0 0 12px; }
+    .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+    .muted { color:#666; font-size: 13px; }
+    .progress { height: 10px; background:#e8eaee; border-radius:999px; overflow:hidden; }
+    .bar { height: 100%; width:0%; background:#111; transition: width .25s ease; }
+    .qno { font-weight: 700; }
+    .question { font-size: 18px; line-height: 1.6; margin: 10px 0 14px; }
+    input[type="text"] { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid #cfd5df; font-size: 16px; }
+    input[type="text"]:focus { outline: none; border-color:#111; box-shadow: 0 0 0 3px rgba(0,0,0,.08); }
+    button { border: 0; border-radius: 12px; padding: 11px 14px; font-size: 14px; cursor: pointer; }
+    .primary { background:#111; color:#fff; }
+    .ghost { background:#eef1f6; color:#111; }
+    .danger { background:#ffe6e6; color:#900; }
+    .feedback { margin-top: 12px; padding: 12px; border-radius: 12px; background:#f3f4f6; font-size: 14px; }
+    .ok { background:#eaffea; }
+    .ng { background:#ffecec; }
+    .grid { display:grid; grid-template-columns: 1fr; gap: 10px; }
+    .result-list { margin-top: 12px; }
+    details { background:#fff; border-radius: 12px; padding: 10px 12px; border: 1px solid #e4e7ee; }
+    summary { cursor:pointer; font-weight: 600; }
+    .small { font-size: 12px; color:#555; }
+    .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background:#f1f3f7; padding: 2px 6px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card" id="screen-start">
+      <h1>記入式クイズ（55問ランダム）</h1>
+      <p class="muted">
+        全55問をランダム順で1周出題します。<span class="kbd">Enter</span>でも回答できます。
+      </p>
+      <div class="row" style="margin-top:14px;">
+        <button class="primary" id="btn-start">はじめる</button>
+      </div>
+      <div class="feedback" style="margin-top:12px;">
+        <div class="small">
+          ※前に文字化けした場合は、保存形式がRTFになっている可能性があります。TextEditなら
+          <span class="kbd">フォーマット → 標準テキストにする</span> で保存してください。
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="screen-quiz" style="display:none;">
+      <div class="row" style="justify-content:space-between;">
+        <div><span class="qno" id="qno">1</span> / <span id="qtotal">55</span></div>
+        <div class="muted">正解数：<span id="score">0</span></div>
+      </div>
+      <div class="progress" style="margin-top:10px;">
+        <div class="bar" id="bar"></div>
+      </div>
+
+      <div class="question" id="question"></div>
+
+      <div class="grid">
+        <input id="answer" type="text" placeholder="ここに回答を入力" autocomplete="off" />
+        <div class="row">
+          <button class="primary" id="btn-submit">回答する</button>
+          <button class="ghost" id="btn-skip" title="不正解として次へ">スキップ</button>
+          <button class="danger" id="btn-reset" title="最初からやり直し">リセット</button>
+        </div>
+      </div>
+
+      <div class="feedback" id="feedback" style="display:none;"></div>
+    </div>
+
+    <div class="card" id="screen-result" style="display:none;">
+      <h1>結果</h1>
+      <p style="font-size:18px; margin: 10px 0;">
+        <strong id="finalScore"></strong>
+      </p>
+      <p class="muted" id="finalMeta"></p>
+
+      <div class="row" style="margin-top:12px;">
+        <button class="primary" id="btn-retry">もう一度（再シャッフル）</button>
+        <button class="ghost" id="btn-review">解答レビューを表示</button>
+      </div>
+
+      <div class="result-list" id="review" style="display:none;"></div>
+    </div>
+  </div>
+
+<script>
+/**
+ * 記入式 55問（ランダム順・1周）
+ * 回答判定は「空白/全角半角/大小文字/句読点や記号」をある程度吸収します
+ */
+const QUESTIONS = [
+  { q: "日本列島が属する造山帯", a: ["環太平洋造山帯"] },
+  { q: "江戸時代に、牛馬の処理などをさせられ、差別を受けていた身分", a: ["えた、ひにん", "えた", "ひにん", "えたひにん"] },
+  { q: "黒潮から分かれて日本海に流れ込む暖流", a: ["対馬海流"] },
+  { q: "江戸時代の外様大名で、琉球王国との貿易が認められていた藩", a: ["薩摩藩"] },
+  { q: "大都市の近くで行われる新鮮なものを栽培する農業", a: ["近郊農業"] },
+  { q: "北海道に古くから住む先住民族", a: ["アイヌ民族", "アイヌ"] },
+  { q: "温暖な気候を利用して、夏の野菜を別の季節に栽培する農業", a: ["促成栽培"] },
+  { q: "明治時代に北海道の開拓と警備にあたった農兵", a: ["屯田兵"] },
+  { q: "冷涼な気候を利用して、冬の野菜を別の季節に栽培する農業", a: ["抑制栽培"] },
+  { q: "植物の受粉を繰り返すことで、新たな種類を開発すること", a: ["品種改良"] },
+  { q: "人口が減少し、地域社会を維持することが困難な地域", a: ["過疎地域"] },
+  { q: "北海道の世界遺産で流氷が来ることで知られている場所", a: ["知床半島", "知床"] },
+  { q: "人口が極端に集中している地域", a: ["過密地域"] },
+  { q: "東北地方の太平洋側に吹く、冷害をもたらす季節風", a: ["やませ"] },
+  { q: "特定の産業に頼った経済状態", a: ["モノカルチャー経済"] },
+  { q: "東北地方の中央部を南北に走る山脈", a: ["奥羽山脈"] },
+  { q: "主に河川の中流に形成される、水はけのよい地形", a: ["扇状地"] },
+  { q: "岩手県平泉市にある、奥州藤原氏がつくった世界遺産", a: ["中尊寺"] },
+  { q: "扇状地で行われやすい農業", a: ["果樹栽培"] },
+  { q: "静岡県の太平洋岸を中心に広がる工業地域", a: ["東海工業地域"] },
+  { q: "主に河川の下流に形成される、水はけのわるい地形", a: ["三角州"] },
+  { q: "愛知票・岐阜県・三重県に広がる工業地帯", a: ["中京工業地帯"] },
+  { q: "三角州で行われやすい農業", a: ["稲作"] },
+  { q: "北陸地方などで発展してきだ、地域と結びついた産業", a: ["地場産業"] },
+  { q: "日本の工業地帯・工業地域が集中する茨城～北九州までの一帯", a: ["太平洋ベルト"] },
+  { q: "新潟県にある日本有数の米どころである平野", a: ["越後平野"] },
+  { q: "石炭や鉄鉱石の採掘がさかんで、日本の重要な貿易相手国", a: ["オーストラリア"] },
+  { q: "飛騨山脈・木曽山脈・赤石山脈の総称", a: ["日本アルプス"] },
+  { q: "沿岸部に石油の採掘がさかんな国が多くある湾", a: ["ペルシャ湾"] },
+  { q: "愛知県・岐阜隈・三重県に広がる日本有数の平野", a: ["濃尾平野"] },
+  { q: "工場の海外移転などで、国内の産業が衰退すること", a: ["産業の空洞化"] },
+  { q: "豊田市や鈴鹿市のように、大企業の中心地とする都市", a: ["産業都市"] },
+  { q: "鹿児島県を中心とする、火山灰質の土地でできた台地", a: ["シラス台地"] },
+  { q: "享保の改革を行った人物", a: ["徳川吉宗"] },
+  { q: "火山の火口付近に形成される、くぽ地型の地形", a: ["カルデラ"] },
+  { q: "寛政の改革を行った人物", a: ["松平定信"] },
+  { q: "1901年に現在の北九州市で操業を開始した製鉄所", a: ["八幡製鉄所"] },
+  { q: "天保の改革を行った人物", a: ["水野忠邦"] },
+  { q: "八幡製鉄所を中心として発展した工業地帯", a: ["北九州工業地帯"] },
+  { q: "江戸幕府の許可を得て、営業を独占した商工業者の同業者組合", a: ["株仲間"] },
+  { q: "九州北部の平野で、主に稲作が行われている場所", a: ["筑紫平野"] },
+  { q: "奥の細道を著し、俳諧を確立した人物", a: ["松尾芭蕉"] },
+  { q: "熊本県ハ代海沿岸でおきた、メチル水銀を原因とする公害", a: ["水俣病"] },
+  { q: "西洋の医学などをオランダ語で研究する学問", a: ["蘭学"] },
+  { q: "富山県の神通川流域で起きた、カドミウムを原因とする公害", a: ["イタイイタイ病"] },
+  { q: "日本全国の沿岸を調査して、日本地図をつくった人物", a: ["伊能忠敬"] },
+  { q: "三重県で発生した、大気汚染を原因とする公害", a: ["四日市ぜんそく"] },
+  { q: "フランス革命で出された自由・平等などをうたった宣言", a: ["フランス人権宣言"] },
+  { q: "宗教改革のきっかけを作ったドイツ人の神学者", a: ["ルター"] },
+  { q: "18世紀後半にイギリスではじまった、産業や社会の変革", a: ["産業革命"] },
+  { q: "織田信長が鉄砲を用いて武田勝頼を破った戦い", a: ["長篠の戦い"] },
+  { q: "徳川綱吉が活動していたころに形成された、上方の文化", a: ["元禄文化"] },
+  { q: "豊臣秀吉が全国の土地や収穫量を測量した政策", a: ["太閤検地"] },
+  { q: "寛政の改革が行われていたころに形成された、江戸の文化", a: ["化政文化"] },
+  { q: "江戸時代に大名の統制のために出されだ法律", a: ["武家諸法度"] },
+];
+
+const EXPECTED_COUNT = 55;
+
+/** 正規化：空白/全角半角/英字大小/よくある句読点・記号を吸収 */
+function normalize(str) {
+  if (str == null) return "";
+  let s = String(str).trim();
+
+  // 空白（全角含む）除去
+  s = s.replace(/[ \u3000\t\r\n]+/g, "");
+
+  // 全角英数→半角（簡易）
+  s = s.replace(/[！-～]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
+
+  // 英字は小文字化
+  s = s.toLowerCase();
+
+  // 句読点・中点・カンマ・ピリオド・ハイフン類などを除去（表記ゆれ吸収）
+  s = s.replace(/[、，,。．.・･：:;／/（）()［\[\]］【】『』「」"“”'’\-ー―—–]/g, "");
+
+  return s;
+}
+
+function shuffle(array) {
+  const a = array.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+const el = (id) => document.getElementById(id);
+
+let order = [];
+let idx = 0;
+let correct = 0;
+let startedAt = null;
+let log = []; // {q, user, correct, answers}
+
+function showScreen(name) {
+  el("screen-start").style.display = name === "start" ? "" : "none";
+  el("screen-quiz").style.display = name === "quiz" ? "" : "none";
+  el("screen-result").style.display = name === "result" ? "" : "none";
+}
+
+function validateQuestions() {
+  if (!Array.isArray(QUESTIONS) || QUESTIONS.length === 0) {
+    alert("QUESTIONS に問題が入っていません。");
+    return false;
+  }
+  if (QUESTIONS.length !== EXPECTED_COUNT) {
+    const ok = confirm(`QUESTIONSが ${QUESTIONS.length} 問です（想定は${EXPECTED_COUNT}問）。このまま開始しますか？`);
+    if (!ok) return false;
+  }
+  for (const [i, it] of QUESTIONS.entries()) {
+    if (!it || typeof it.q !== "string" || !Array.isArray(it.a) || it.a.length === 0) {
+      alert(`QUESTIONS[${i}] の形式が正しくありません。 { q: "...", a: ["..."] } を確認してください。`);
+      return false;
+    }
+  }
+  return true;
+}
+
+function start() {
+  if (!validateQuestions()) return;
+
+  order = shuffle(QUESTIONS.map((_, i) => i));
+  idx = 0;
+  correct = 0;
+  startedAt = Date.now();
+  log = [];
+  el("qtotal").textContent = String(order.length);
+  el("score").textContent = "0";
+  el("feedback").style.display = "none";
+  showScreen("quiz");
+  render();
+  el("answer").focus();
+}
+
+function render() {
+  const total = order.length;
+  const qIndex = order[idx];
+  const item = QUESTIONS[qIndex];
+
+  el("qno").textContent = String(idx + 1);
+  el("question").textContent = item.q;
+  el("answer").value = "";
+  el("feedback").style.display = "none";
+
+  const pct = Math.round((idx / total) * 100);
+  el("bar").style.width = pct + "%";
+}
+
+function grade(userInput, item) {
+  const u = normalize(userInput);
+  const answers = item.a.map(normalize);
+  const isCorrect = answers.includes(u);
+  return { isCorrect };
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function submit(isSkip=false) {
+  const total = order.length;
+  const qIndex = order[idx];
+  const item = QUESTIONS[qIndex];
+
+  const user = isSkip ? "" : el("answer").value;
+  const { isCorrect } = isSkip ? { isCorrect: false } : grade(user, item);
+
+  if (isCorrect) correct++;
+
+  log.push({
+    q: item.q,
+    user: user,
+    correct: isCorrect,
+    answers: item.a.slice()
+  });
+
+  el("score").textContent = String(correct);
+
+  const fb = el("feedback");
+  fb.style.display = "";
+  fb.className = "feedback " + (isCorrect ? "ok" : "ng");
+
+  const correctText = item.a[0];
+  fb.innerHTML = isCorrect
+    ? `✅ 正解！`
+    : `❌ 不正解。正解例：<strong>${escapeHtml(correctText)}</strong>` +
+      (item.a.length > 1 ? `<div class="small">別表記：${item.a.slice(1).map(escapeHtml).join(" / ")}</div>` : "");
+
+  if (idx + 1 >= total) {
+    el("bar").style.width = "100%";
+    setTimeout(showResult, 450);
+  } else {
+    setTimeout(() => next(), 900);
+  }
+}
+
+function next() {
+  const total = order.length;
+  if (idx + 1 >= total) return;
+  idx++;
+  render();
+  el("answer").focus();
+}
+
+function showResult() {
+  const total = order.length;
+  const percent = Math.round((correct / total) * 1000) / 10;
+  const elapsedSec = startedAt ? Math.round((Date.now() - startedAt) / 1000) : 0;
+
+  el("finalScore").textContent = `${correct} / ${total}（${percent}%）`;
+  el("finalMeta").textContent = `所要時間：${elapsedSec}秒 / 開始：${new Date(startedAt).toLocaleString()} / 終了：${new Date().toLocaleString()}`;
+  el("review").style.display = "none";
+  el("review").innerHTML = "";
+  el("btn-review").textContent = "解答レビューを表示";
+  showScreen("result");
+}
+
+function buildReview() {
+  const container = el("review");
+  container.innerHTML = "";
+  log.forEach((r, i) => {
+    const d = document.createElement("details");
+    const s = document.createElement("summary");
+    s.innerHTML = `${i + 1}. ${r.correct ? "✅" : "❌"} ${escapeHtml(r.q)}`;
+    d.appendChild(s);
+
+    const div = document.createElement("div");
+    div.className = "small";
+    div.style.marginTop = "8px";
+    div.innerHTML =
+      `あなたの回答：<strong>${r.user ? escapeHtml(r.user) : "（未回答）"}</strong><br>` +
+      `正解例：<strong>${escapeHtml(r.answers[0])}</strong>` +
+      (r.answers.length > 1 ? `<br>別表記：${r.answers.slice(1).map(escapeHtml).join(" / ")}` : "");
+    d.appendChild(div);
+
+    container.appendChild(d);
+  });
+}
+
+function resetAll() {
+  if (!confirm("リセットして最初からやり直しますか？")) return;
+  showScreen("start");
+}
+
+el("btn-start").addEventListener("click", start);
+el("btn-submit").addEventListener("click", () => submit(false));
+el("btn-skip").addEventListener("click", () => submit(true));
+el("btn-reset").addEventListener("click", resetAll);
+el("btn-retry").addEventListener("click", start);
+el("btn-review").addEventListener("click", () => {
+  const box = el("review");
+  if (box.style.display === "none") {
+    buildReview();
+    box.style.display = "";
+    el("btn-review").textContent = "解答レビューを隠す";
+  } else {
+    box.style.display = "none";
+    el("btn-review").textContent = "解答レビューを表示";
+  }
+});
+
+document.addEventListener("keydown", (e) => {
+  const inQuiz = el("screen-quiz").style.display !== "none";
+  if (!inQuiz) return;
+  if (e.key === "Enter") {
+    e.preventDefault();
+    submit(false);
+  }
+});
+</script>
+</body>
+</html>
